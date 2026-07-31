@@ -6,8 +6,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from '../vendor/three/OrbitControls.js'
 import { TransformControls } from '../vendor/three/TransformControls.js'
-import { environmentById } from './doc.mjs'
-import { createSession } from '../engine/resolver.mjs'
+import { environmentById } from './doc.mjs?v=4'
+import { createSession } from '../engine/resolver.mjs?v=4'
 
 export function createViewport (canvas, callbacks) {
   const cb = callbacks // { onPick(id|null), onGizmoChange(id), onGizmoCommit(id) }

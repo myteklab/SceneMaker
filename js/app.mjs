@@ -3,9 +3,9 @@
    Exposes window.SceneMakerApp: the neutral surface the platform adapter
    drives (no Platform.* anywhere in app code). */
 
-import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes } from './doc.mjs'
-import { createViewport } from './editor.mjs'
-import { initUI } from './ui.mjs'
+import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes } from './doc.mjs?v=4'
+import { createViewport } from './editor.mjs?v=4'
+import { initUI } from './ui.mjs?v=4'
 
 const canvas = document.getElementById('viewport')
 

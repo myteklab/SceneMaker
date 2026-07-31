@@ -1,7 +1,7 @@
 /* SceneMaker: panels and toolbar. Renders FROM state, calls actions.
    No Three.js here; no direct doc mutation. */
 
-import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs'
+import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs?v=4'
 
 const $ = sel => document.querySelector(sel)
 
