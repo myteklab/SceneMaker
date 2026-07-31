@@ -120,7 +120,20 @@ async function main () {
     s = await S()
     check('newProject restores the default scene', s.objects.length === 1 && s.dirty === false)
 
-    console.log('[9] Preview capture')
+    console.log('[9] Theme')
+    const t0 = await ev('JSON.stringify({t: SceneMakerApp.theme(), attr: document.documentElement.dataset.theme})')
+    const th0 = JSON.parse(t0)
+    check('theme attr matches app theme', th0.t === th0.attr, th0)
+    await ev('SceneMakerApp.actions.toggleTheme()')
+    let th = JSON.parse(await ev('JSON.stringify({t: SceneMakerApp.theme(), attr: document.documentElement.dataset.theme, stored: localStorage.getItem("scenemaker.theme")})'))
+    check('toggle flips theme and persists override', th.t !== th0.t && th.attr === th.t && th.stored === th.t, th)
+    await ev('SceneMakerApp.setDefaultTheme("dark")')
+    th = JSON.parse(await ev('JSON.stringify({t: SceneMakerApp.theme()})'))
+    check('override outranks platform default', th.t === (th0.t === 'dark' ? 'light' : 'dark'), th)
+    await ev('localStorage.removeItem("scenemaker.theme"); SceneMakerApp.actions.toggleTheme()') // back to original for cleanliness
+    await ev('localStorage.removeItem("scenemaker.theme")')
+
+    console.log('[10] Preview capture')
     const prev = await ev('(function(){ var d = SceneMakerApp.previewDataUrl(); return JSON.stringify({ png: d.indexOf("data:image/png") === 0, len: d.length }) })()')
     const p = JSON.parse(prev)
     check('preview is a real png (' + p.len + ' chars)', p.png && p.len > 5000, p)

@@ -7,9 +7,24 @@
   --text: #2a3142;
   --text-dim: #6a7286;
   --accent: #4c8dff;
+  --accent-strong: #2456b8;
   --accent-soft: #e3edff;
   --danger: #e05c74;
+  --chip-bg: rgba(255, 255, 255, 0.72);
   --radius: 10px;
+}
+
+:root[data-theme="dark"] {
+  --bg: #14171e;
+  --panel: #1d222c;
+  --panel-border: #2b3140;
+  --text: #dde3ee;
+  --text-dim: #8d97ab;
+  --accent: #5c9aff;
+  --accent-strong: #9cc0ff;
+  --accent-soft: #223049;
+  --danger: #ef7089;
+  --chip-bg: rgba(29, 34, 44, 0.78);
 }
 
 * { box-sizing: border-box; }
@@ -91,22 +106,22 @@ body {
   user-select: none;
 }
 .tree-row:hover { background: var(--bg); }
-.tree-row.selected { background: var(--accent-soft); color: #2456b8; }
+.tree-row.selected { background: var(--accent-soft); color: var(--accent-strong); }
 .tree-row.hidden-obj .tree-name { opacity: 0.45; }
 .tree-row .eye {
   border: 0; background: none; cursor: pointer; color: var(--text-dim);
   font-size: 9px; width: 16px; padding: 0;
 }
-.tree-row.selected .eye { color: #2456b8; }
+.tree-row.selected .eye { color: var(--accent-strong); }
 .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree-row input { flex: 1; min-width: 0; font-size: 12.5px; border: 1px solid var(--accent); border-radius: 5px; padding: 2px 5px; }
+.tree-row input { flex: 1; min-width: 0; font-size: 12.5px; border: 1px solid var(--accent); border-radius: 5px; padding: 2px 5px; color: var(--text); background: var(--bg); }
 
 /* ---------------------------------------------------------------- center */
 #center { grid-area: center; position: relative; min-width: 0; }
 #viewport { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
 #fps {
   position: absolute; bottom: 10px; right: 12px;
-  background: rgba(255,255,255,0.72); border-radius: 7px; padding: 2px 8px;
+  background: var(--chip-bg); border-radius: 7px; padding: 2px 8px;
   font-size: 11px; color: var(--text-dim); pointer-events: none;
 }
 
@@ -133,7 +148,7 @@ body {
 .vec3 input {
   width: 100%; min-width: 0; font-size: 12px;
   border: 1px solid var(--panel-border); border-radius: 6px; padding: 4px 2px 4px 6px;
-  color: var(--text);
+  color: var(--text); background: var(--bg);
 }
 .vec3 input:focus { border-color: var(--accent); outline: none; }
 
@@ -143,7 +158,7 @@ body {
   padding: 6px 2px; font-size: 11px; cursor: pointer; color: var(--text-dim);
 }
 .finish-btn:hover { border-color: var(--accent); color: var(--accent); }
-.finish-btn.active { background: var(--accent-soft); border-color: var(--accent); color: #2456b8; font-weight: 600; }
+.finish-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); font-weight: 600; }
 
 .env-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .env-btn {
@@ -152,7 +167,7 @@ body {
   display: flex; align-items: center; gap: 7px;
 }
 .env-btn:hover { border-color: var(--accent); }
-.env-btn.active { border-color: var(--accent); color: #2456b8; font-weight: 600; background: var(--accent-soft); }
+.env-btn.active { border-color: var(--accent); color: var(--accent-strong); font-weight: 600; background: var(--accent-soft); }
 .env-chip { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--panel-border); flex-shrink: 0; }
 
 .panel-hint { color: var(--text-dim); font-size: 11.5px; line-height: 1.55; padding: 4px 14px; }

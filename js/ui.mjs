@@ -39,6 +39,7 @@ export function initUI (state, actions) {
   $('#tb-redo').addEventListener('click', () => actions.redo())
   $('#tb-dup').addEventListener('click', () => actions.duplicateSelected())
   $('#tb-del').addEventListener('click', () => actions.deleteSelected())
+  $('#tb-theme').addEventListener('click', () => actions.toggleTheme())
 
   function refreshToolbar () {
     for (const [mode, btn] of Object.entries(modeBtns)) btn.classList.toggle('active', state.gizmoMode === mode)

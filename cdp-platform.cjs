@@ -84,7 +84,17 @@ async function main () {
     check('saved environment survives reload', round.env === 'sunset', round.env)
     check('fresh load is NOT dirty', round.dirty === false)
 
-    console.log('[4] Preview through the real adapter path')
+    console.log('[4] Theme follows the site setting (site default = dark)')
+    const theme = JSON.parse(await ev(`(function(){
+      var w = document.getElementById('app-frame').contentWindow;
+      return JSON.stringify({
+        attr: w.document.documentElement.getAttribute('data-theme'),
+        app: w.SceneMakerApp.theme()
+      });
+    })()`))
+    check('app defaults to the site theme (dark)', theme.attr === 'dark' && theme.app === 'dark', theme)
+
+    console.log('[5] Preview through the real adapter path')
     const prev = JSON.parse(await ev(`(function(){
       var w = document.getElementById('app-frame').contentWindow;
       var got = null, orig = w.Platform.sendPreview;

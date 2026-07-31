@@ -205,6 +205,13 @@ export const actions = {
     preDrag = JSON.stringify(state.doc)
   },
 
+  toggleTheme () {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark'
+    themeOverride = next
+    try { localStorage.setItem(THEME_KEY, next) } catch (e) {}
+    applyTheme()
+  },
+
   undo () {
     if (!state.undo.length) return
     state.redo.push(JSON.stringify(state.doc))
@@ -222,6 +229,28 @@ export const actions = {
 canvas.addEventListener('pointerdown', () => {
   if (state.selectedId) actions.markDragStart()
 })
+
+// ---------------------------------------------------------------- theme
+// UI chrome only; the 3D scene keeps its environment (that's content).
+// Default follows the platform (adapter calls setDefaultTheme); the topbar
+// toggle stores a per-app override that wins until toggled again.
+const THEME_KEY = 'scenemaker.theme'
+let themeDefault = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'
+let themeOverride = null
+try { const t = localStorage.getItem(THEME_KEY); if (t === 'dark' || t === 'light') themeOverride = t } catch (e) {}
+
+function currentTheme () { return themeOverride || themeDefault }
+
+function applyTheme () {
+  document.documentElement.dataset.theme = currentTheme()
+  const moon = document.getElementById('theme-icon-moon')
+  const sun = document.getElementById('theme-icon-sun')
+  if (moon && sun) {
+    moon.style.display = currentTheme() === 'dark' ? 'none' : ''
+    sun.style.display = currentTheme() === 'dark' ? '' : 'none'
+  }
+}
+applyTheme()
 
 // ---------------------------------------------------------------- UI
 const ui = initUI(state, actions)
@@ -255,6 +284,13 @@ window.SceneMakerApp = {
     setDirty(false)
   },
   onDirty (cb) { dirtyCbs.push(cb) },
+  // Platform default theme (adapter reads the site setting). A stored
+  // per-app override wins; otherwise the UI follows the site.
+  setDefaultTheme (t) {
+    themeDefault = t === 'dark' ? 'dark' : 'light'
+    applyTheme()
+  },
+  theme: () => currentTheme(),
   markClean () { setDirty(false) },
   isDirty: () => state.dirty,
   previewDataUrl: () => viewport.previewDataUrl(),
@@ -267,6 +303,7 @@ window.SceneMakerApp = {
     gizmoMode: state.gizmoMode,
     snap: state.snap,
     environment: state.doc.environment.preset,
+    theme: currentTheme(),
     frames: viewport.stats().frames,
     frameMs: viewport.stats().frameMs
   }),
