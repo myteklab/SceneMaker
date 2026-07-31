@@ -1,0 +1,261 @@
+/* SceneMaker: application state + actions. Owns the doc, selection, undo,
+   and the dirty flag. The UI calls actions; the viewport reflects the doc.
+   Exposes window.SceneMakerApp: the neutral surface the platform adapter
+   drives (no Platform.* anywhere in app code). */
+
+import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY } from './doc.mjs'
+import { createViewport } from './editor.mjs'
+import { initUI } from './ui.mjs'
+
+const canvas = document.getElementById('viewport')
+
+const state = {
+  doc: createDefaultDoc(),
+  selectedId: null,
+  gizmoMode: 'translate',
+  snap: true,
+  dirty: false,
+  undo: [],
+  redo: []
+}
+
+const dirtyCbs = []
+function setDirty (d) {
+  state.dirty = d
+  for (const f of dirtyCbs) f(d)
+}
+
+// ---------------------------------------------------------------- undo/redo
+const UNDO_DEPTH = 100
+function snapshot () {
+  state.undo.push(JSON.stringify(state.doc))
+  if (state.undo.length > UNDO_DEPTH) state.undo.shift()
+  state.redo.length = 0
+}
+
+function restore (json) {
+  state.doc = normalizeDoc(JSON.parse(json))
+  const stillThere = state.doc.objects.find(o => o.id === state.selectedId)
+  viewport.buildAll(state.doc)
+  actions.select(stillThere ? state.selectedId : null)
+  ui.refreshAll()
+  setDirty(true)
+}
+
+// ---------------------------------------------------------------- viewport
+const viewport = createViewport(canvas, {
+  onPick (id) { actions.select(id) },
+  onGizmoChange (id, tr) {
+    const o = byId(id)
+    if (!o) return
+    o.transform.p = tr.p; o.transform.r = tr.r; o.transform.s = tr.s
+    ui.refreshProperties()
+  },
+  onGizmoCommit () {
+    commit()
+  }
+})
+
+function byId (id) { return state.doc.objects.find(o => o.id === id) }
+
+// A committed mutation: undo point + dirty. Call AFTER the doc changed for
+// discrete edits; for drags, once at the end.
+let preDrag = null
+function commit () {
+  if (preDrag !== null) { state.undo.push(preDrag); if (state.undo.length > UNDO_DEPTH) state.undo.shift(); state.redo.length = 0; preDrag = null }
+  setDirty(true)
+  ui.refreshTree()
+}
+
+// ---------------------------------------------------------------- actions
+export const actions = {
+  select (id) {
+    state.selectedId = id
+    viewport.select(id)
+    ui.refreshTree()
+    ui.refreshProperties()
+  },
+
+  addPrimitive (type) {
+    snapshot()
+    const counter = nextCounter(state.doc, type)
+    const o = makeObject(type, { counter })
+    // Nudge spawn position so stacked adds don't z-fight.
+    const n = state.doc.objects.length
+    o.transform.p[0] = ((n % 5) - 2) * 0.9
+    o.transform.p[2] = (Math.floor(n / 5) % 3) * 0.9
+    o.transform.p[1] = restingY(type, o.params)
+    state.doc.objects.push(o)
+    viewport.addObject(o)
+    actions.select(o.id)
+    setDirty(true)
+  },
+
+  deleteSelected () {
+    const o = byId(state.selectedId)
+    if (!o) return
+    snapshot()
+    state.doc.objects = state.doc.objects.filter(x => x.id !== o.id)
+    viewport.removeObject(o.id)
+    actions.select(null)
+    setDirty(true)
+  },
+
+  duplicateSelected () {
+    const o = byId(state.selectedId)
+    if (!o) return
+    snapshot()
+    const copy = JSON.parse(JSON.stringify(o))
+    copy.id = freshId()
+    copy.name = o.name + ' copy'
+    copy.transform.p = [o.transform.p[0] + 0.6, o.transform.p[1], o.transform.p[2] + 0.6]
+    state.doc.objects.push(copy)
+    viewport.addObject(copy)
+    actions.select(copy.id)
+    setDirty(true)
+  },
+
+  rename (id, name) {
+    const o = byId(id)
+    if (!o || !name.trim()) return
+    snapshot()
+    o.name = name.trim().slice(0, 60)
+    setDirty(true)
+    ui.refreshTree()
+  },
+
+  toggleVisible (id) {
+    const o = byId(id)
+    if (!o) return
+    snapshot()
+    o.visible = o.visible === false
+    viewport.syncVisibility(o)
+    setDirty(true)
+    ui.refreshTree()
+  },
+
+  // Discrete property edit from the panel (number input / slider / picker).
+  // `snapshotFirst` false lets slider "input" stream without undo spam; the
+  // matching "change" event commits with snapshotFirst true.
+  setTransform (id, tr, snapshotFirst) {
+    const o = byId(id)
+    if (!o) return
+    if (snapshotFirst) snapshot()
+    Object.assign(o.transform, tr)
+    viewport.syncTransform(o)
+    if (snapshotFirst) setDirty(true)
+  },
+
+  setMaterial (id, values, snapshotFirst) {
+    const o = byId(id)
+    if (!o) return
+    if (snapshotFirst) snapshot()
+    Object.assign(o.material, values)
+    if ('flat' in values) { o.params.flat = values.flat; delete o.material.flat }
+    viewport.syncMaterial(o)
+    if (snapshotFirst) setDirty(true)
+  },
+
+  applyFinish (id, finishId, values) {
+    const o = byId(id)
+    if (!o) return
+    snapshot()
+    o.material = { color: o.material.color, finish: finishId, ...values }
+    o.params.flat = values.flat
+    viewport.syncMaterial(o)
+    setDirty(true)
+  },
+
+  setEnvironment (values, snapshotFirst = true) {
+    if (snapshotFirst) snapshot()
+    Object.assign(state.doc.environment, values)
+    viewport.applyEnvironment(state.doc.environment)
+    if (snapshotFirst) setDirty(true)
+  },
+
+  setGizmoMode (mode) {
+    state.gizmoMode = mode
+    viewport.setGizmoMode(mode)
+    ui.refreshToolbar()
+  },
+
+  toggleSnap () {
+    state.snap = !state.snap
+    viewport.setSnap(state.snap)
+    ui.refreshToolbar()
+  },
+
+  markDragStart () {
+    preDrag = JSON.stringify(state.doc)
+  },
+
+  undo () {
+    if (!state.undo.length) return
+    state.redo.push(JSON.stringify(state.doc))
+    restore(state.undo.pop())
+  },
+
+  redo () {
+    if (!state.redo.length) return
+    state.undo.push(JSON.stringify(state.doc))
+    restore(state.redo.pop())
+  }
+}
+
+// Gizmo drags: capture pre-drag state for one undo entry per drag.
+canvas.addEventListener('pointerdown', () => {
+  if (state.selectedId) actions.markDragStart()
+})
+
+// ---------------------------------------------------------------- UI
+const ui = initUI(state, actions)
+viewport.buildAll(state.doc)
+ui.refreshAll()
+
+// ---------------------------------------------------------------- adapter API
+window.SceneMakerApp = {
+  getProjectData () {
+    // Persist the current editor camera so reopening feels familiar.
+    const cam = viewport.cameraState()
+    state.doc.camera.position = cam.position
+    state.doc.camera.target = cam.target
+    return JSON.parse(JSON.stringify(state.doc))
+  },
+  loadProjectData (raw) {
+    state.doc = normalizeDoc(raw)
+    state.undo.length = 0
+    state.redo.length = 0
+    viewport.buildAll(state.doc)
+    actions.select(null)
+    ui.refreshAll()
+    setDirty(false)
+  },
+  newProject () {
+    state.doc = createDefaultDoc()
+    state.undo.length = 0; state.redo.length = 0
+    viewport.buildAll(state.doc)
+    actions.select(null)
+    ui.refreshAll()
+    setDirty(false)
+  },
+  onDirty (cb) { dirtyCbs.push(cb) },
+  markClean () { setDirty(false) },
+  isDirty: () => state.dirty,
+  previewDataUrl: () => viewport.previewDataUrl(),
+  stats: () => viewport.stats(),
+  state: () => ({
+    objects: state.doc.objects.map(o => ({ id: o.id, name: o.name, type: o.type })),
+    selectedId: state.selectedId,
+    dirty: state.dirty,
+    undoDepth: state.undo.length,
+    gizmoMode: state.gizmoMode,
+    snap: state.snap,
+    environment: state.doc.environment.preset,
+    frames: viewport.stats().frames,
+    frameMs: viewport.stats().frameMs
+  }),
+  actions,
+  _doc: () => state.doc
+}
+
+window.dispatchEvent(new CustomEvent('scenemaker:ready'))

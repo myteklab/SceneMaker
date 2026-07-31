@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SceneMaker</title>
+<link rel="stylesheet" href="css/editor.css?v=1">
+</head>
+<body>
+<div id="topbar">
+  <span class="logo">Scene<em>Maker</em></span>
+  <div class="tb-group">
+    <button class="tb-btn" id="tb-move" title="Move (W)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+      Move<span class="kbd">W</span>
+    </button>
+    <button class="tb-btn" id="tb-rotate" title="Rotate (E)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      Rotate<span class="kbd">E</span>
+    </button>
+    <button class="tb-btn" id="tb-scale" title="Scale (R)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      Scale<span class="kbd">R</span>
+    </button>
+  </div>
+  <div class="tb-group">
+    <button class="tb-btn" id="tb-snap" title="Snap to grid">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+      Snap
+    </button>
+  </div>
+  <div class="tb-group">
+    <button class="tb-btn" id="tb-undo" title="Undo (Ctrl+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+      Undo
+    </button>
+    <button class="tb-btn" id="tb-redo" title="Redo (Ctrl+Y)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+      Redo
+    </button>
+  </div>
+  <div class="tb-group">
+    <button class="tb-btn" id="tb-dup" title="Duplicate (Ctrl+D)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Duplicate
+    </button>
+    <button class="tb-btn" id="tb-del" title="Delete (Del)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Delete
+    </button>
+  </div>
+  <div class="tb-spacer"></div>
+</div>
+
+<div id="left">
+  <h4>Add a shape</h4>
+  <div id="add-palette"></div>
+  <h4>Scene</h4>
+  <div id="tree"></div>
+  <div id="tree-empty">Your scene is empty.<br>Add a shape above!</div>
+</div>
+
+<div id="center">
+  <canvas id="viewport"></canvas>
+  <div id="fps"></div>
+</div>
+
+<div id="right">
+  <div id="props"></div>
+</div>
+
+<script type="importmap">
+  { "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+<script type="module" src="./js/app.mjs?v=1"></script>
+<script>
+  setInterval(function () {
+    var el = document.getElementById('fps')
+    if (el && window.SceneMakerApp) el.textContent = Math.round(1000 / SceneMakerApp.stats().frameMs) + ' fps'
+  }, 500)
+</script>
+</body>
+</html>
