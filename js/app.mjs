@@ -3,9 +3,9 @@
    Exposes window.SceneMakerApp: the neutral surface the platform adapter
    drives (no Platform.* anywhere in app code). */
 
-import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes, makeModelObject, validModelUrl } from './doc.mjs?v=5'
-import { createViewport } from './editor.mjs?v=5'
-import { initUI } from './ui.mjs?v=5'
+import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes, makeModelObject, validModelUrl } from './doc.mjs?v=6'
+import { createViewport } from './editor.mjs?v=6'
+import { initUI } from './ui.mjs?v=6'
 
 const canvas = document.getElementById('viewport')
 
@@ -119,12 +119,13 @@ export const actions = {
   },
 
   // Add a 3D model by URL (GLB): our Files/exports or any https link.
-  addModel (url) {
+  addModel (url, name) {
     const clean = validModelUrl(url)
     if (!clean) return { ok: false, error: 'Paste a link that starts with https:// (or a file on this site).' }
     snapshot()
     const counter = state.doc.objects.filter(x => x.type === 'model').length + 1
     const o = makeModelObject(clean, { counter })
+    if (typeof name === 'string' && name.trim()) o.name = name.replace(/\.(glb|gltf)$/i, '').trim().slice(0, 60) || o.name
     const spot = freeSpot()
     o.transform.p = [spot[0], 0, spot[1]]
     state.doc.objects.push(o)
@@ -132,6 +133,14 @@ export const actions = {
     actions.select(o.id)
     setDirty(true)
     return { ok: true, id: o.id }
+  },
+
+  // "Pick from my Files": the platform adapter opens the asset picker; the
+  // app only announces the wish. Standalone (no adapter) explains itself.
+  requestModelPick () {
+    if (!window.__smAdapter) return { ok: false, error: 'Picking from your Files works inside the platform.' }
+    window.dispatchEvent(new CustomEvent('scenemaker:pickModel'))
+    return { ok: true }
   },
 
   // Fit slider on models: rebuild the node so the GLB renormalizes.
@@ -407,6 +416,11 @@ window.SceneMakerApp = {
     frameMs: viewport.stats().frameMs
   }),
   modelStatus: id => viewport.modelStatus(id),
+  // Adapter feedback line under the model input (picker flow messages).
+  showModelMessage (msg) {
+    const el = document.getElementById('model-error')
+    if (el) el.textContent = msg || ''
+  },
   // Play-mode drive for tests: inject events, sample the engine at wall t.
   play: {
     inject: (type, target, key, x, y) => viewport.playInject(type, target, key, x, y),

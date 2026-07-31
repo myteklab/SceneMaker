@@ -1,7 +1,7 @@
 /* SceneMaker: panels and toolbar. Renders FROM state, calls actions.
    No Three.js here; no direct doc mutation. */
 
-import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs?v=5'
+import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs?v=6'
 
 const $ = sel => document.querySelector(sel)
 
@@ -37,6 +37,11 @@ export function initUI (state, actions) {
     if (r.ok) { modelUrl.value = ''; modelErr.textContent = '' } else { modelErr.textContent = r.error }
   })
   modelUrl.addEventListener('keydown', e => { if (e.key === 'Enter') $('#model-add').click() })
+  $('#model-pick').addEventListener('click', () => {
+    modelErr.textContent = ''
+    const r = actions.requestModelPick()
+    if (r && !r.ok) modelErr.textContent = r.error
+  })
 
   // ---------------------------------------------------------------- toolbar
   const modeBtns = { translate: $('#tb-move'), rotate: $('#tb-rotate'), scale: $('#tb-scale') }

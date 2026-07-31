@@ -215,6 +215,8 @@ async function main () {
     await ev(`SceneMakerApp.loadProjectData({ objects: [{ type: 'model', params: { url: 'javascript:alert(1)' } }] })`)
     d3 = JSON.parse(await ev('JSON.stringify(SceneMakerApp._doc())'))
     check('malicious model URL normalized out', d3.objects.length === 0, d3.objects)
+    const pick = JSON.parse(await ev('JSON.stringify(SceneMakerApp.actions.requestModelPick())'))
+    check('pick-from-Files degrades gracefully standalone', pick.ok === false && /platform/i.test(pick.error), pick)
     const dead = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.actions.addModel('/apps/scenemaker--dev/nope.glb'))`))
     await sleep(2500)
     const deadSt = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.modelStatus(${JSON.stringify(dead.id)}))`))

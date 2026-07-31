@@ -6,9 +6,9 @@
 import * as THREE from 'three'
 import { OrbitControls } from '../vendor/three/OrbitControls.js'
 import { TransformControls } from '../vendor/three/TransformControls.js'
-import { environmentById } from './doc.mjs?v=5'
-import { createSession } from '../engine/resolver.mjs?v=5'
-import { geometryFor, applyMaterialValues, createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=5'
+import { environmentById } from './doc.mjs?v=6'
+import { createSession } from '../engine/resolver.mjs?v=6'
+import { geometryFor, applyMaterialValues, createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=6'
 
 export function createViewport (canvas, callbacks) {
   const cb = callbacks // { onPick(id|null), onGizmoChange(id), onGizmoCommit(id) }

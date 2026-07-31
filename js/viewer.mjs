@@ -6,9 +6,9 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from '../vendor/three/OrbitControls.js'
-import { normalizeDoc, environmentById } from './doc.mjs?v=5'
-import { createSession } from '../engine/resolver.mjs?v=5'
-import { createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=5'
+import { normalizeDoc, environmentById } from './doc.mjs?v=6'
+import { createSession } from '../engine/resolver.mjs?v=6'
+import { createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=6'
 
 const canvas = document.getElementById('viewer-canvas')
 const hintEl = document.getElementById('viewer-hint')

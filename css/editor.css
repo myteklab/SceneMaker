@@ -215,6 +215,12 @@ body {
   padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--text-dim);
 }
 #model-row button:hover { border-color: var(--accent); color: var(--accent); }
+#model-pick {
+  width: 100%; margin-top: 5px;
+  border: 1px dashed var(--panel-border); background: none; border-radius: 7px;
+  padding: 5px 8px; font-size: 11.5px; cursor: pointer; color: var(--text-dim);
+}
+#model-pick:hover { border-color: var(--accent); color: var(--accent); }
 #model-error { color: var(--danger); font-size: 11px; padding-top: 4px; line-height: 1.4; }
 .model-link { padding: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-error-note { color: var(--danger); padding: 0 0 6px; }

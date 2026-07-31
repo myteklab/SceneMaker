@@ -150,7 +150,10 @@ async function loadModelInto (o, group, placeholder) {
   const url = o.params && o.params.url
   const fit = (o.params && o.params.fit) || 1.5
   try {
-    const res = await fetch(url)
+    // The platform adapter may install an auth decorator (private Files need
+    // the owner's token at fetch time; the token itself is NEVER in the doc).
+    const fetchUrl = (typeof window !== 'undefined' && window.__smModelUrlAuth) ? window.__smModelUrlAuth(url) : url
+    const res = await fetch(fetchUrl)
     if (!res.ok) throw new Error('HTTP ' + res.status)
     const len = Number(res.headers.get('content-length') || 0)
     if (len > MODEL_BYTE_CAP) throw new Error('model too large (' + Math.round(len / 1048576) + 'MB, cap 20MB)')

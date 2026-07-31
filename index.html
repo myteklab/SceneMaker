@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SceneMaker</title>
-<link rel="stylesheet" href="css/editor.css?v=4">
+<link rel="stylesheet" href="css/editor.css?v=5">
 </head>
 <body>
 <div id="topbar">
@@ -74,6 +74,7 @@
       <input id="model-url" type="text" placeholder="Paste a .glb link" maxlength="500">
       <button id="model-add" title="Add model">Add</button>
     </div>
+    <button id="model-pick">Pick from my Files</button>
     <div id="model-error"></div>
   </div>
   <h4>Scene</h4>
@@ -93,7 +94,7 @@
 <script type="importmap">
   { "imports": { "three": "./vendor/three/three.module.min.js" } }
 </script>
-<script type="module" src="./js/app.mjs?v=5"></script>
+<script type="module" src="./js/app.mjs?v=6"></script>
 <script>
   setInterval(function () {
     var el = document.getElementById('fps')
