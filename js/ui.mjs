@@ -1,7 +1,7 @@
 /* SceneMaker: panels and toolbar. Renders FROM state, calls actions.
    No Three.js here; no direct doc mutation. */
 
-import { PRIMITIVES, FINISHES, ENVIRONMENTS, finishById } from './doc.mjs'
+import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs'
 
 const $ = sel => document.querySelector(sel)
 
@@ -40,19 +40,26 @@ export function initUI (state, actions) {
   $('#tb-dup').addEventListener('click', () => actions.duplicateSelected())
   $('#tb-del').addEventListener('click', () => actions.deleteSelected())
   $('#tb-theme').addEventListener('click', () => actions.toggleTheme())
+  $('#tb-play').addEventListener('click', () => actions.togglePlay())
 
   function refreshToolbar () {
     for (const [mode, btn] of Object.entries(modeBtns)) btn.classList.toggle('active', state.gizmoMode === mode)
     $('#tb-snap').classList.toggle('active', state.snap)
-    $('#tb-undo').disabled = !state.undo.length
-    $('#tb-redo').disabled = !state.redo.length
-    const has = !!state.selectedId
+    $('#tb-undo').disabled = !state.undo.length || state.playing
+    $('#tb-redo').disabled = !state.redo.length || state.playing
+    const has = !!state.selectedId && !state.playing
     $('#tb-dup').disabled = !has
     $('#tb-del').disabled = !has
+    const play = $('#tb-play')
+    play.classList.toggle('playing', state.playing)
+    $('#play-label').textContent = state.playing ? 'Stop' : 'Play'
+    $('#play-icon-go').style.display = state.playing ? 'none' : ''
+    $('#play-icon-stop').style.display = state.playing ? '' : 'none'
   }
 
   // ---------------------------------------------------------------- keyboard
   window.addEventListener('keydown', e => {
+    if (state.playing) return // play mode owns the keyboard (engine events)
     const tag = (e.target.tagName || '').toLowerCase()
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); actions.undo(); return }
@@ -191,6 +198,74 @@ export function initUI (state, actions) {
       v => actions.setMaterial(o.id, { opacity: v }, false),
       v => actions.setMaterial(o.id, { opacity: v }, true)))
     propsEl.appendChild(sec2)
+
+    propsEl.appendChild(recipeSection(o))
+  }
+
+  // "Bring it to life": add interaction recipes, tune them, press Play.
+  function recipeSection (o) {
+    const sec = section('Bring it to life')
+
+    const mine = state.doc.recipes.filter(r => r.object === o.id)
+    for (const r of mine) {
+      const def = recipeByType(r.type)
+      const chip = document.createElement('div')
+      chip.className = 'recipe-chip'
+      const head = document.createElement('div')
+      head.className = 'recipe-head'
+      const title = document.createElement('span')
+      title.textContent = def.label
+      const del = document.createElement('button')
+      del.className = 'recipe-del'
+      del.title = 'Remove'
+      del.textContent = '✕'
+      del.addEventListener('click', () => actions.removeRecipe(r.id))
+      head.appendChild(title)
+      head.appendChild(del)
+      chip.appendChild(head)
+
+      chip.appendChild(sliderRow(def.param.label, r.params[def.param.key], def.param.min, def.param.max, def.param.step,
+        v => actions.setRecipeParam(r.id, def.param.key, v, false),
+        v => actions.setRecipeParam(r.id, def.param.key, v, true)))
+
+      if (def.keyParam) {
+        const row = document.createElement('div')
+        row.className = 'prop-row'
+        row.innerHTML = '<label>Which key</label>'
+        const sel = document.createElement('select')
+        for (const k of KEY_CHOICES) {
+          const opt = document.createElement('option')
+          opt.value = k.id; opt.textContent = k.label
+          if (r.params.pressKey === k.id) opt.selected = true
+          sel.appendChild(opt)
+        }
+        sel.addEventListener('change', () => actions.setRecipeParam(r.id, 'pressKey', sel.value, true))
+        row.appendChild(sel)
+        chip.appendChild(row)
+      }
+      sec.appendChild(chip)
+    }
+
+    const grid = document.createElement('div')
+    grid.className = 'recipe-grid'
+    for (const def of RECIPES) {
+      const has = mine.find(r => r.type === def.type)
+      const b = document.createElement('button')
+      b.className = 'recipe-btn'
+      b.textContent = '+ ' + def.label
+      b.disabled = !!has
+      b.addEventListener('click', () => actions.addRecipe(o.id, def.type))
+      grid.appendChild(b)
+    }
+    sec.appendChild(grid)
+
+    const hint = document.createElement('p')
+    hint.className = 'panel-hint recipe-hint'
+    hint.textContent = mine.length
+      ? 'Press Play to try it!'
+      : 'Pick one, then press Play to try it.'
+    sec.appendChild(hint)
+    return sec
   }
 
   function section (title) {

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SceneMaker</title>
-<link rel="stylesheet" href="css/editor.css?v=2">
+<link rel="stylesheet" href="css/editor.css?v=3">
 </head>
 <body>
 <div id="topbar">
@@ -49,6 +49,13 @@
       Delete
     </button>
   </div>
+  <div class="tb-group">
+    <button class="tb-btn play-btn" id="tb-play" title="Try your scene">
+      <svg id="play-icon-go" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="6 3 21 12 6 21 6 3"/></svg>
+      <svg id="play-icon-stop" style="display:none" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+      <span id="play-label">Play</span>
+    </button>
+  </div>
   <div class="tb-spacer"></div>
   <div class="tb-group">
     <button class="tb-btn" id="tb-theme" title="Light / dark mode">
@@ -78,7 +85,7 @@
 <script type="importmap">
   { "imports": { "three": "./vendor/three/three.module.min.js" } }
 </script>
-<script type="module" src="./js/app.mjs?v=2"></script>
+<script type="module" src="./js/app.mjs?v=3"></script>
 <script>
   setInterval(function () {
     var el = document.getElementById('fps')

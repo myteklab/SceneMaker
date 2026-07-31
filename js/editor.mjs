@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { OrbitControls } from '../vendor/three/OrbitControls.js'
 import { TransformControls } from '../vendor/three/TransformControls.js'
 import { environmentById } from './doc.mjs'
+import { createSession } from '../engine/resolver.mjs'
 
 export function createViewport (canvas, callbacks) {
   const cb = callbacks // { onPick(id|null), onGizmoChange(id), onGizmoCommit(id) }
@@ -238,18 +239,115 @@ export function createViewport (canvas, callbacks) {
   const raycaster = new THREE.Raycaster()
   const ndc = new THREE.Vector2()
   let downAt = null
+
+  function pickAt (clientX, clientY) {
+    const r = canvas.getBoundingClientRect()
+    ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1)
+    raycaster.setFromCamera(ndc, camera)
+    const hits = raycaster.intersectObjects(Object.values(meshes), false)
+    return hits.length ? hits[0].object.userData.docId : null
+  }
+
   canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY] })
   canvas.addEventListener('pointerup', e => {
     if (!downAt) return
     const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1])
     downAt = null
     if (moved > 5 || gizmo.dragging) return
-    const r = canvas.getBoundingClientRect()
-    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
-    raycaster.setFromCamera(ndc, camera)
-    const hits = raycaster.intersectObjects(Object.values(meshes), false)
-    cb.onPick(hits.length ? hits[0].object.userData.docId : null)
+    const id = pickAt(e.clientX, e.clientY)
+    if (playing) { if (id) pushPlay({ type: 'click', target: id }) } else cb.onPick(id)
   })
+
+  // ------------------------------------------------------------ play mode
+  // The editor's own engine loop: same resolver the published viewer will
+  // run. Pixels come from session.sample(t); the doc is untouched.
+  let playing = false
+  let playSession = null
+  let playT0 = 0
+  let playLastT = 0
+  let playHovered = null
+  let playPointerDirty = false
+  const playNdc = { x: 0, y: 0 }
+
+  function playNow () { return (performance.now() - playT0) / 1000 }
+  function pushPlay (ev) {
+    if (!playSession) return
+    ev.t = Math.max(playNow(), playLastT)
+    playLastT = ev.t
+    playSession.push(ev)
+  }
+
+  canvas.addEventListener('pointermove', e => {
+    if (!playing) return
+    const r = canvas.getBoundingClientRect()
+    playNdc.x = ((e.clientX - r.left) / r.width) * 2 - 1
+    playNdc.y = -((e.clientY - r.top) / r.height) * 2 + 1
+    playPointerDirty = true
+    const id = pickAt(e.clientX, e.clientY)
+    if (id !== playHovered) {
+      if (playHovered) pushPlay({ type: 'hoverexit', target: playHovered })
+      if (id) pushPlay({ type: 'hoverenter', target: id })
+      playHovered = id
+      canvas.style.cursor = id ? 'pointer' : 'default'
+    }
+  })
+  window.addEventListener('keydown', e => {
+    if (!playing || e.repeat) return
+    if (e.key === ' ' || e.key.startsWith('Arrow')) e.preventDefault()
+    pushPlay({ type: 'keydown', key: e.key })
+  })
+  window.addEventListener('keyup', e => {
+    if (!playing) return
+    pushPlay({ type: 'keyup', key: e.key })
+  })
+
+  function setPlayMode (on, doc) {
+    playing = on
+    if (on) {
+      select(null)
+      playSession = createSession(doc)
+      playT0 = performance.now()
+      playLastT = 0
+      playHovered = null
+      pushPlay({ type: 'start' })
+    } else {
+      playSession = null
+      canvas.style.cursor = 'default'
+      buildAll(doc, true) // restore the authored scene exactly
+    }
+  }
+
+  function applyResolved (res) {
+    for (const id of Object.keys(res)) {
+      const g = nodes[id]
+      if (!g) continue
+      const ch = res[id]
+      if (ch['transform.p']) g.position.fromArray(ch['transform.p'])
+      if (ch['transform.r']) g.rotation.set(ch['transform.r'][0], ch['transform.r'][1], ch['transform.r'][2])
+      if (ch['transform.s']) g.scale.fromArray(ch['transform.s'])
+      const mat = materials[id]
+      if (mat) {
+        if (ch['material.color']) { mat.color.set(ch['material.color']); mat.emissive.set(ch['material.color']) }
+        if (ch['material.emissiveIntensity'] !== undefined) mat.emissiveIntensity = ch['material.emissiveIntensity']
+        if (ch['material.opacity'] !== undefined) { mat.opacity = ch['material.opacity']; mat.transparent = mat.opacity < 1 }
+      }
+      if (ch.visible !== undefined) g.visible = ch.visible
+    }
+  }
+
+  // Headless-CDP support: sample the engine at wall-clock t (rAF may crawl).
+  function playSampleNow () {
+    if (!playSession) return null
+    return playSession.sample(Math.max(playNow(), playLastT))
+  }
+  function playInject (type, target, key, x, y) {
+    const ev = { type }
+    if (target) ev.target = target
+    if (key !== undefined && key !== null) ev.key = key
+    if (x !== undefined && x !== null) { ev.x = x; ev.y = y }
+    pushPlay(ev)
+    return true
+  }
 
   // ------------------------------------------------------------ frame loop
   let frames = 0
@@ -271,7 +369,13 @@ export function createViewport (canvas, callbacks) {
     frameMs = frameMs * 0.95 + (t - last) * 0.05
     last = t
     resize()
-    if (selectedId && nodes[selectedId]) selBox.setFromObject(nodes[selectedId])
+    if (playing && playSession) {
+      if (playPointerDirty) { pushPlay({ type: 'pointer', x: playNdc.x, y: playNdc.y }); playPointerDirty = false }
+      const res = playSession.sample(Math.max(playNow(), playLastT))
+      applyResolved(res)
+    } else if (selectedId && nodes[selectedId]) {
+      selBox.setFromObject(nodes[selectedId])
+    }
     orbit.update()
     renderer.render(scene, camera)
     frames++
@@ -304,6 +408,9 @@ export function createViewport (canvas, callbacks) {
     select,
     setGizmoMode,
     setSnap,
+    setPlayMode,
+    playSampleNow,
+    playInject,
     previewDataUrl,
     stats: () => ({ frames, frameMs: Math.round(frameMs * 100) / 100 }),
     cameraState: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),

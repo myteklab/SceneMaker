@@ -3,7 +3,7 @@
    Exposes window.SceneMakerApp: the neutral surface the platform adapter
    drives (no Platform.* anywhere in app code). */
 
-import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY } from './doc.mjs'
+import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes } from './doc.mjs'
 import { createViewport } from './editor.mjs'
 import { initUI } from './ui.mjs'
 
@@ -14,6 +14,7 @@ const state = {
   selectedId: null,
   gizmoMode: 'translate',
   snap: true,
+  playing: false,
   dirty: false,
   undo: [],
   redo: []
@@ -21,6 +22,9 @@ const state = {
 
 const dirtyCbs = []
 function setDirty (d) {
+  // Every committed mutation funnels through here: recompile so interactions
+  // stay anchored to the objects' current base values.
+  if (d) compileRecipes(state.doc)
   state.dirty = d
   for (const f of dirtyCbs) f(d)
 }
@@ -28,9 +32,16 @@ function setDirty (d) {
 // ---------------------------------------------------------------- undo/redo
 const UNDO_DEPTH = 100
 function snapshot () {
+  stopPlayIfPlaying()
   state.undo.push(JSON.stringify(state.doc))
   if (state.undo.length > UNDO_DEPTH) state.undo.shift()
   state.redo.length = 0
+}
+
+// Any edit while playing drops back to edit mode first: the scene on screen
+// is engine output, not the doc, and editing through it would lie.
+function stopPlayIfPlaying () {
+  if (state.playing) actions.stopPlay()
 }
 
 function restore (json) {
@@ -70,6 +81,7 @@ function commit () {
 // ---------------------------------------------------------------- actions
 export const actions = {
   select (id) {
+    stopPlayIfPlaying()
     state.selectedId = id
     viewport.select(id)
     ui.refreshTree()
@@ -123,6 +135,9 @@ export const actions = {
     copy.name = o.name + ' copy'
     copy.transform.p = [o.transform.p[0] + 0.6, o.transform.p[1], o.transform.p[2] + 0.6]
     state.doc.objects.push(copy)
+    for (const r of state.doc.recipes.filter(x => x.object === o.id)) {
+      state.doc.recipes.push({ ...makeRecipe(copy.id, r.type), params: JSON.parse(JSON.stringify(r.params)) })
+    }
     viewport.addObject(copy)
     actions.select(copy.id)
     setDirty(true)
@@ -205,6 +220,55 @@ export const actions = {
     preDrag = JSON.stringify(state.doc)
   },
 
+  // ---------------------------------------------------------- recipes
+  addRecipe (objectId, type) {
+    const o = byId(objectId)
+    if (!o) return
+    snapshot()
+    state.doc.recipes.push(makeRecipe(objectId, type))
+    compileRecipes(state.doc)
+    setDirty(true)
+    ui.refreshProperties()
+  },
+
+  removeRecipe (recipeId) {
+    snapshot()
+    state.doc.recipes = state.doc.recipes.filter(r => r.id !== recipeId)
+    compileRecipes(state.doc)
+    setDirty(true)
+    ui.refreshProperties()
+  },
+
+  setRecipeParam (recipeId, key, value, snapshotFirst) {
+    const r = state.doc.recipes.find(x => x.id === recipeId)
+    if (!r) return
+    if (snapshotFirst) snapshot()
+    r.params[key] = value
+    compileRecipes(state.doc)
+    if (snapshotFirst) setDirty(true)
+  },
+
+  // ---------------------------------------------------------- play
+  togglePlay () {
+    if (state.playing) actions.stopPlay()
+    else actions.startPlay()
+  },
+
+  startPlay () {
+    if (state.playing) return
+    compileRecipes(state.doc)
+    state.playing = true
+    viewport.setPlayMode(true, state.doc)
+    ui.refreshToolbar()
+  },
+
+  stopPlay () {
+    if (!state.playing) return
+    state.playing = false
+    viewport.setPlayMode(false, state.doc)
+    ui.refreshToolbar()
+  },
+
   toggleTheme () {
     const next = currentTheme() === 'dark' ? 'light' : 'dark'
     themeOverride = next
@@ -260,6 +324,7 @@ ui.refreshAll()
 // ---------------------------------------------------------------- adapter API
 window.SceneMakerApp = {
   getProjectData () {
+    compileRecipes(state.doc)
     // Persist the current editor camera so reopening feels familiar.
     const cam = viewport.cameraState()
     state.doc.camera.position = cam.position
@@ -267,6 +332,7 @@ window.SceneMakerApp = {
     return JSON.parse(JSON.stringify(state.doc))
   },
   loadProjectData (raw) {
+    stopPlayIfPlaying()
     state.doc = normalizeDoc(raw)
     state.undo.length = 0
     state.redo.length = 0
@@ -276,6 +342,7 @@ window.SceneMakerApp = {
     setDirty(false)
   },
   newProject () {
+    stopPlayIfPlaying()
     state.doc = createDefaultDoc()
     state.undo.length = 0; state.redo.length = 0
     viewport.buildAll(state.doc)
@@ -304,9 +371,16 @@ window.SceneMakerApp = {
     snap: state.snap,
     environment: state.doc.environment.preset,
     theme: currentTheme(),
+    playing: state.playing,
+    recipes: state.doc.recipes.map(r => ({ id: r.id, object: r.object, type: r.type })),
     frames: viewport.stats().frames,
     frameMs: viewport.stats().frameMs
   }),
+  // Play-mode drive for tests: inject events, sample the engine at wall t.
+  play: {
+    inject: (type, target, key, x, y) => viewport.playInject(type, target, key, x, y),
+    sampleNow: () => viewport.playSampleNow()
+  },
   actions,
   _doc: () => state.doc
 }

@@ -172,6 +172,35 @@ body {
 
 .panel-hint { color: var(--text-dim); font-size: 11.5px; line-height: 1.55; padding: 4px 14px; }
 
+/* ------------------------------------------------------------- play button */
+.play-btn { color: #fff !important; background: #33b06a !important; font-weight: 600; }
+.play-btn:hover { background: #2c9d5e !important; }
+.play-btn.playing { background: var(--danger) !important; }
+.play-btn svg { width: 13px; height: 13px; }
+
+/* ------------------------------------------------------------- recipes */
+.recipe-chip {
+  border: 1px solid var(--panel-border); border-radius: 9px;
+  padding: 8px 10px 2px; margin-bottom: 8px; background: var(--bg);
+}
+.recipe-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-weight: 600; font-size: 12.5px; }
+.recipe-del { border: 0; background: none; color: var(--text-dim); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+.recipe-del:hover { color: var(--danger); }
+.recipe-chip select {
+  flex: 1; min-width: 0; font-size: 12px; padding: 3px 6px;
+  border: 1px solid var(--panel-border); border-radius: 6px;
+  color: var(--text); background: var(--panel);
+}
+.recipe-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.recipe-btn {
+  border: 1px dashed var(--panel-border); background: none; border-radius: 7px;
+  padding: 5px 8px; font-size: 11.5px; cursor: pointer; color: var(--text-dim);
+  text-align: left;
+}
+.recipe-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.recipe-btn:disabled { opacity: 0.35; cursor: default; }
+.recipe-hint { padding: 2px 0 6px; }
+
 /* Narrow screens: stack panels over the viewport edges. */
 @media (max-width: 860px) {
   body { grid-template-columns: 176px 1fr 210px; }

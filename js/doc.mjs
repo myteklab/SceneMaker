@@ -71,6 +71,7 @@ export function createDefaultDoc () {
     objects: [
       makeObject('box', { counter: 1, color: '#ff5470' })
     ],
+    recipes: [],
     events: [],
     timelines: [],
     bindings: []
@@ -118,6 +119,200 @@ export function nextCounter (doc, type) {
   return n + 1
 }
 
+// ---------------------------------------------------------------- recipes
+// A recipe is the kid-facing authoring unit: "press like a button", "spin",
+// "watch the cursor". Each compiles into the REAL spec-66 vocabulary
+// (states + events + timelines + bindings) with namespaced ids, referencing
+// the object's CURRENT base values. Recompile after any doc mutation so
+// moving an object keeps its interactions anchored. The published viewer
+// only ever sees the compiled arrays: recipes are an editor concept.
+
+function shade (hex, k) { // k in [-1, 1]: darken negative, lighten positive
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#888888')
+  if (!m) return hex
+  const c = [m[1], m[2], m[3]].map(x => parseInt(x, 16))
+  const t = k < 0 ? 0 : 255
+  const a = Math.abs(k)
+  return '#' + c.map(v => {
+    const n = Math.round(v + (t - v) * a)
+    const h = Math.max(0, Math.min(255, n)).toString(16)
+    return h.length === 1 ? '0' + h : h
+  }).join('')
+}
+
+export const KEY_CHOICES = [
+  { id: ' ', label: 'Space' },
+  { id: 'Enter', label: 'Enter' },
+  { id: 'ArrowUp', label: 'Up arrow' },
+  { id: 'j', label: 'J' }
+]
+
+export const RECIPES = [
+  {
+    type: 'press',
+    label: 'Press like a button',
+    param: { key: 'depth', label: 'How far down', min: 0.05, max: 0.6, step: 0.01, def: 0.12 },
+    compile (o, params, rid) {
+      const p = o.transform.p
+      return {
+        states: {
+          [`r_${rid}_down`]: { 'transform.p': [p[0], p[1] - params.depth, p[2]], 'material.color': shade(o.material.color, -0.22) },
+          [`r_${rid}_up`]: { 'transform.p': p.slice(), 'material.color': o.material.color }
+        },
+        events: [{ trigger: 'click', target: o.id, object: o.id, action: 'toggle', states: [`r_${rid}_up`, `r_${rid}_down`], duration: 0.16, easing: 'easeOutBack' }]
+      }
+    }
+  },
+  {
+    type: 'hoverGrow',
+    label: 'Grow on hover',
+    param: { key: 'amount', label: 'How much bigger', min: 1.05, max: 1.7, step: 0.01, def: 1.15 },
+    compile (o, params, rid) {
+      const s = o.transform.s
+      return {
+        states: {
+          [`r_${rid}_big`]: { 'transform.s': s.map(v => v * params.amount) },
+          [`r_${rid}_calm`]: { 'transform.s': s.slice() }
+        },
+        events: [
+          { trigger: 'hoverenter', target: o.id, object: o.id, action: 'state', state: `r_${rid}_big`, duration: 0.14, easing: 'easeOutQuad' },
+          { trigger: 'hoverexit', target: o.id, object: o.id, action: 'state', state: `r_${rid}_calm`, duration: 0.3, easing: 'easeOutQuad' }
+        ]
+      }
+    }
+  },
+  {
+    type: 'hoverGlow',
+    label: 'Glow on hover',
+    param: { key: 'glow', label: 'How bright', min: 0.4, max: 2, step: 0.05, def: 1.2 },
+    compile (o, params, rid) {
+      const base = o.material.emissiveIntensity || 0
+      return {
+        states: {
+          [`r_${rid}_lit`]: { 'material.emissiveIntensity': params.glow },
+          [`r_${rid}_dim`]: { 'material.emissiveIntensity': base }
+        },
+        events: [
+          { trigger: 'hoverenter', target: o.id, object: o.id, action: 'state', state: `r_${rid}_lit`, duration: 0.15, easing: 'easeOutQuad' },
+          { trigger: 'hoverexit', target: o.id, object: o.id, action: 'state', state: `r_${rid}_dim`, duration: 0.35, easing: 'easeOutQuad' }
+        ]
+      }
+    }
+  },
+  {
+    type: 'spin',
+    label: 'Spin',
+    param: { key: 'secs', label: 'Seconds per turn', min: 1.5, max: 15, step: 0.5, def: 6 },
+    compile (o, params, rid) {
+      const r = o.transform.r
+      return {
+        timelines: [{
+          id: `tl_${rid}`, object: o.id, duration: params.secs, loop: 'loop',
+          tracks: [{ channel: 'transform.r', keys: [{ t: 0, v: r.slice(), easing: 'linear' }, { t: params.secs, v: [r[0], r[1] + 2 * Math.PI, r[2]], easing: 'linear' }] }]
+        }],
+        events: [{ trigger: 'start', action: 'timeline', op: 'play', timeline: `tl_${rid}` }]
+      }
+    }
+  },
+  {
+    type: 'bob',
+    label: 'Bob up and down',
+    param: { key: 'height', label: 'How high', min: 0.1, max: 1.2, step: 0.05, def: 0.3 },
+    compile (o, params, rid) {
+      const p = o.transform.p
+      return {
+        timelines: [{
+          id: `tl_${rid}`, object: o.id, duration: 1, loop: 'pingpong',
+          tracks: [{ channel: 'transform.p', keys: [{ t: 0, v: p.slice(), easing: 'easeInOutQuad' }, { t: 1, v: [p[0], p[1] + params.height, p[2]], easing: 'easeInOutQuad' }] }]
+        }],
+        events: [{ trigger: 'start', action: 'timeline', op: 'play', timeline: `tl_${rid}` }]
+      }
+    }
+  },
+  {
+    type: 'jumpKey',
+    label: 'Jump on a key',
+    param: { key: 'height', label: 'How high', min: 0.3, max: 2.5, step: 0.1, def: 1 },
+    keyParam: true,
+    compile (o, params, rid) {
+      const p = o.transform.p
+      const h = params.height
+      return {
+        timelines: [{
+          id: `tl_${rid}`, object: o.id, duration: 0.95, loop: 'once',
+          tracks: [{ channel: 'transform.p',
+            keys: [
+              { t: 0, v: p.slice(), easing: 'easeOutQuad' },
+              { t: 0.38, v: [p[0], p[1] + h, p[2]], easing: 'easeInQuad' },
+              { t: 0.62, v: [p[0], p[1] + 0.02, p[2]], easing: 'easeOutBounce' },
+              { t: 0.95, v: p.slice(), easing: 'linear' }
+            ] }]
+        }],
+        events: [
+          { trigger: 'keydown', key: params.pressKey || ' ', action: 'timeline', op: 'restart', timeline: `tl_${rid}` },
+          { trigger: 'click', target: o.id, action: 'timeline', op: 'restart', timeline: `tl_${rid}` }
+        ]
+      }
+    }
+  },
+  {
+    type: 'watchCursor',
+    label: 'Watch the cursor',
+    param: { key: 'amount', label: 'How much it turns', min: 0.15, max: 1, step: 0.05, def: 0.5 },
+    compile (o, params) {
+      return { bindings: [{ type: 'lookAt', object: o.id, maxYaw: params.amount, maxPitch: params.amount * 0.55 }] }
+    }
+  },
+  {
+    type: 'followCursor',
+    label: 'Follow the cursor',
+    param: { key: 'range', label: 'How far it moves', min: 0.1, max: 1.5, step: 0.05, def: 0.5 },
+    compile (o, params) {
+      const r = params.range
+      return { bindings: [{ type: 'follow', object: o.id, channel: 'transform.p', map: { x: [-r, r], y: [-r * 0.7, r * 0.7] } }] }
+    }
+  }
+]
+
+export function recipeByType (type) {
+  return RECIPES.find(r => r.type === type)
+}
+
+export function makeRecipe (objectId, type) {
+  const def = recipeByType(type)
+  const params = { [def.param.key]: def.param.def }
+  if (def.keyParam) params.pressKey = ' '
+  return { id: 'rc_' + Date.now().toString(36) + '_' + (++recipeCounter), object: objectId, type, params }
+}
+let recipeCounter = 0
+
+// Regenerate the compiled interaction arrays from doc.recipes. Replaces all
+// recipe-owned entries (r_/tl_ prefixes); anything else (future hand-authored
+// states) is left alone.
+export function compileRecipes (doc) {
+  for (const o of doc.objects) {
+    for (const k of Object.keys(o.states || {})) if (k.startsWith('r_')) delete o.states[k]
+  }
+  doc.events = (doc.events || []).filter(e => !isRecipeEvent(e))
+  doc.timelines = (doc.timelines || []).filter(t => !String(t.id).startsWith('tl_rc'))
+  doc.bindings = []
+  doc.recipes = (doc.recipes || []).filter(r => doc.objects.find(o => o.id === r.object))
+  for (const r of doc.recipes) {
+    const def = recipeByType(r.type)
+    const obj = doc.objects.find(o => o.id === r.object)
+    if (!def || !obj) continue
+    const out = def.compile(obj, r.params, r.id)
+    if (out.states) Object.assign(obj.states, out.states)
+    if (out.events) doc.events.push(...out.events.map(e => ({ ...e, _recipe: r.id })))
+    if (out.timelines) doc.timelines.push(...out.timelines)
+    if (out.bindings) doc.bindings.push(...out.bindings)
+  }
+}
+
+function isRecipeEvent (e) {
+  return !!e._recipe || (e.action === 'timeline' && String(e.timeline).startsWith('tl_rc'))
+}
+
 // ---------------------------------------------------------------- normalize
 // Loaded docs pass through here: fills gaps, drops unknowns, never throws.
 // This is the forward-compatibility seam for later doc versions.
@@ -153,8 +348,25 @@ export function normalizeDoc (raw) {
     if (o.states && typeof o.states === 'object') base.states = o.states
     doc.objects.push(base)
   }
-  if (Array.isArray(raw.events)) doc.events = raw.events
-  if (Array.isArray(raw.timelines)) doc.timelines = raw.timelines
-  if (Array.isArray(raw.bindings)) doc.bindings = raw.bindings
+  const seenR = new Set()
+  for (const r of Array.isArray(raw.recipes) ? raw.recipes : []) {
+    if (!r || typeof r !== 'object' || !recipeByType(r.type)) continue
+    if (typeof r.id !== 'string' || seenR.has(r.id)) continue
+    if (!seen.has(r.object)) continue
+    seenR.add(r.id)
+    const def = recipeByType(r.type)
+    const params = { [def.param.key]: def.param.def }
+    if (def.keyParam) params.pressKey = ' '
+    if (r.params && typeof r.params === 'object') {
+      if (typeof r.params[def.param.key] === 'number') {
+        params[def.param.key] = Math.min(def.param.max, Math.max(def.param.min, r.params[def.param.key]))
+      }
+      if (def.keyParam && KEY_CHOICES.find(k => k.id === r.params.pressKey)) params.pressKey = r.params.pressKey
+    }
+    doc.recipes.push({ id: r.id, object: r.object, type: r.type, params })
+  }
+  // Interaction arrays are always regenerated from recipes: the compiled form
+  // in a saved doc is for the viewer, never re-imported.
+  compileRecipes(doc)
   return doc
 }
