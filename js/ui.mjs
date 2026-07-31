@@ -1,7 +1,7 @@
 /* SceneMaker: panels and toolbar. Renders FROM state, calls actions.
    No Three.js here; no direct doc mutation. */
 
-import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs?v=4'
+import { PRIMITIVES, FINISHES, ENVIRONMENTS, RECIPES, KEY_CHOICES, recipeByType } from './doc.mjs?v=5'
 
 const $ = sel => document.querySelector(sel)
 
@@ -28,6 +28,15 @@ export function initUI (state, actions) {
     b.addEventListener('click', () => actions.addPrimitive(p.type))
     addEl.appendChild(b)
   }
+
+  // ---------------------------------------------------------------- add model
+  const modelUrl = $('#model-url')
+  const modelErr = $('#model-error')
+  $('#model-add').addEventListener('click', () => {
+    const r = actions.addModel(modelUrl.value)
+    if (r.ok) { modelUrl.value = ''; modelErr.textContent = '' } else { modelErr.textContent = r.error }
+  })
+  modelUrl.addEventListener('keydown', e => { if (e.key === 'Enter') $('#model-add').click() })
 
   // ---------------------------------------------------------------- toolbar
   const modeBtns = { translate: $('#tb-move'), rotate: $('#tb-rotate'), scale: $('#tb-scale') }
@@ -162,6 +171,28 @@ export function initUI (state, actions) {
     sec1.appendChild(vecRow('Scale', o.transform.s, 0.1, (v, commit) => actions.setTransform(o.id, { s: v }, commit)))
     propsEl.appendChild(sec1)
 
+    if (o.type === 'model') {
+      const secM = section('Model')
+      secM.appendChild(sliderRow('Size', o.params.fit || 1.5, 0.3, 4, 0.1,
+        () => {}, // rebuilding per input tick would re-fetch; commit only
+        v => actions.setModelFit(o.id, v, true)))
+      const link = document.createElement('p')
+      link.className = 'panel-hint model-link'
+      link.textContent = o.params.url
+      link.title = o.params.url
+      secM.appendChild(link)
+      const status = window.SceneMakerApp && SceneMakerApp.modelStatus(o.id)
+      if (status && status.error) {
+        const err = document.createElement('p')
+        err.className = 'panel-hint model-error-note'
+        err.textContent = 'Could not load this model. Check the link points to a .glb file.'
+        secM.appendChild(err)
+      }
+      propsEl.appendChild(secM)
+      propsEl.appendChild(recipeSection(o))
+      return
+    }
+
     const sec2 = section('Material')
     const colorRow = document.createElement('div')
     colorRow.className = 'prop-row'
@@ -249,6 +280,7 @@ export function initUI (state, actions) {
     const grid = document.createElement('div')
     grid.className = 'recipe-grid'
     for (const def of RECIPES) {
+      if (o.type === 'model' && def.materialOnly) continue
       const has = mine.find(r => r.type === def.type)
       const b = document.createElement('button')
       b.className = 'recipe-btn'

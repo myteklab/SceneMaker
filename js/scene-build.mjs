@@ -3,6 +3,10 @@
    renderers can never drift apart. Pure helpers: no scene state here. */
 
 import * as THREE from 'three'
+import { GLTFLoader } from '../vendor/three/GLTFLoader.js'
+
+const MODEL_BYTE_CAP = 20 * 1024 * 1024
+const gltfLoader = new GLTFLoader()
 
 export function geometryFor (o) {
   const p = o.params || {}
@@ -103,9 +107,28 @@ export function applyEnvironmentToStage (envDef, envDoc, stage, scene, pmrem, en
 }
 
 // Build one doc object into a Group. Returns { group, mesh, material }.
+// For 'model' objects the mesh is a placeholder that swaps for the loaded
+// GLB asynchronously; material is null (embedded materials stay theirs).
 export function buildObjectNode (o) {
   const g = new THREE.Group()
   g.userData.docId = o.id
+
+  if (o.type === 'model') {
+    const placeholder = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: '#aab4c8', roughness: 0.8, transparent: true, opacity: 0.4 })
+    )
+    placeholder.position.y = 0.5
+    placeholder.userData.docId = o.id
+    g.add(placeholder)
+    loadModelInto(o, g, placeholder)
+    g.position.fromArray(o.transform.p)
+    g.rotation.set(o.transform.r[0], o.transform.r[1], o.transform.r[2])
+    g.scale.fromArray(o.transform.s)
+    g.visible = o.visible !== false
+    return { group: g, mesh: placeholder, material: null }
+  }
+
   const mat = new THREE.MeshStandardMaterial({ flatShading: !!(o.params && o.params.flat) })
   applyMaterialValues(mat, o.material || {})
   const mesh = new THREE.Mesh(geometryFor(o), mat)
@@ -118,6 +141,49 @@ export function buildObjectNode (o) {
   g.scale.fromArray(o.transform.s)
   g.visible = o.visible !== false
   return { group: g, mesh, material: mat }
+}
+
+// Fetch (size-capped) + parse a GLB, normalize it (fit to a friendly size,
+// centered, feet on the floor), stamp docId + shadows on every node, then
+// swap it in for the placeholder. Failures keep the placeholder and warn.
+async function loadModelInto (o, group, placeholder) {
+  const url = o.params && o.params.url
+  const fit = (o.params && o.params.fit) || 1.5
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const len = Number(res.headers.get('content-length') || 0)
+    if (len > MODEL_BYTE_CAP) throw new Error('model too large (' + Math.round(len / 1048576) + 'MB, cap 20MB)')
+    const buf = await res.arrayBuffer()
+    if (buf.byteLength > MODEL_BYTE_CAP) throw new Error('model too large')
+    const gltf = await new Promise((resolve, reject) => gltfLoader.parse(buf, '', resolve, reject))
+    const root = gltf.scene || (gltf.scenes && gltf.scenes[0])
+    if (!root) throw new Error('empty model')
+    // normalize: fit the largest dimension, center x/z, rest on y=0
+    const bbox = new THREE.Box3().setFromObject(root)
+    const size = bbox.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z) || 1
+    const k = fit / maxDim
+    const wrapper = new THREE.Group()
+    wrapper.scale.setScalar(k)
+    const center = bbox.getCenter(new THREE.Vector3())
+    root.position.set(-center.x, -bbox.min.y, -center.z)
+    wrapper.add(root)
+    wrapper.traverse(n => {
+      n.userData.docId = o.id
+      if (n.isMesh) { n.castShadow = true; n.receiveShadow = true }
+    })
+    group.remove(placeholder)
+    placeholder.geometry.dispose()
+    placeholder.material.dispose()
+    group.add(wrapper)
+    group.userData.modelLoaded = true
+  } catch (err) {
+    console.warn('SceneMaker: could not load model "' + url + '":', err.message || err)
+    placeholder.material.color.set('#e05c74')
+    placeholder.material.opacity = 0.3
+    group.userData.modelError = String(err.message || err)
+  }
 }
 
 // Apply engine-resolved channels to built nodes each frame (play/viewer).

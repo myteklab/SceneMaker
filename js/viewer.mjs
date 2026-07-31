@@ -6,9 +6,9 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from '../vendor/three/OrbitControls.js'
-import { normalizeDoc, environmentById } from './doc.mjs?v=4'
-import { createSession } from '../engine/resolver.mjs?v=4'
-import { createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=4'
+import { normalizeDoc, environmentById } from './doc.mjs?v=5'
+import { createSession } from '../engine/resolver.mjs?v=5'
+import { createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=5'
 
 const canvas = document.getElementById('viewer-canvas')
 const hintEl = document.getElementById('viewer-hint')
@@ -45,8 +45,10 @@ const ndcState = { x: 0, y: 0 }
 function loadDoc (raw) {
   for (const id of Object.keys(nodes)) {
     scene.remove(nodes[id])
-    meshes[id].geometry.dispose()
-    materials[id].dispose()
+    nodes[id].traverse(n => {
+      if (n.geometry) n.geometry.dispose()
+      if (n.material && n.material.dispose) n.material.dispose()
+    })
   }
   nodes = {}; materials = {}; meshes = {}
   doc = normalizeDoc(raw)
@@ -87,8 +89,15 @@ function pickAt (clientX, clientY) {
   const r = canvas.getBoundingClientRect()
   ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1)
   raycaster.setFromCamera(ndc, camera)
-  const hits = raycaster.intersectObjects(Object.values(meshes), false)
-  return hits.length ? hits[0].object.userData.docId : null
+  const hits = raycaster.intersectObjects(Object.values(nodes), true)
+  for (const h of hits) {
+    let n = h.object
+    while (n) {
+      if (n.userData.docId && nodes[n.userData.docId]) return n.userData.docId
+      n = n.parent
+    }
+  }
+  return null
 }
 
 let downAt = null
@@ -166,6 +175,7 @@ window.__smv = {
   state: () => ({
     loaded: !!doc,
     objects: doc ? doc.objects.length : 0,
+    modelsLoaded: Object.keys(nodes).filter(id => nodes[id].userData.modelLoaded).length,
     frames,
     errors
   }),

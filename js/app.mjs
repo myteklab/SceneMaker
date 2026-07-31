@@ -3,9 +3,9 @@
    Exposes window.SceneMakerApp: the neutral surface the platform adapter
    drives (no Platform.* anywhere in app code). */
 
-import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes } from './doc.mjs?v=4'
-import { createViewport } from './editor.mjs?v=4'
-import { initUI } from './ui.mjs?v=4'
+import { createDefaultDoc, normalizeDoc, makeObject, nextCounter, freshId, restingY, makeRecipe, compileRecipes, makeModelObject, validModelUrl } from './doc.mjs?v=5'
+import { createViewport } from './editor.mjs?v=5'
+import { initUI } from './ui.mjs?v=5'
 
 const canvas = document.getElementById('viewport')
 
@@ -69,6 +69,22 @@ const viewport = createViewport(canvas, {
 
 function byId (id) { return state.doc.objects.find(o => o.id === id) }
 
+// First free floor slot near the center: deterministic ring scan.
+function freeSpot () {
+  const taken = state.doc.objects.map(x => x.transform.p)
+  const free = ([x, z]) => taken.every(p => Math.hypot(p[0] - x, p[2] - z) > 0.85)
+  for (let ring = 0; ring <= 4; ring++) {
+    for (let ix = -ring; ix <= ring; ix++) {
+      for (let iz = -ring; iz <= ring; iz++) {
+        if (Math.max(Math.abs(ix), Math.abs(iz)) !== ring) continue
+        const cand = [ix * 1.15, iz * 1.15]
+        if (free(cand)) return cand
+      }
+    }
+  }
+  return [0, 0]
+}
+
 // A committed mutation: undo point + dirty. Call AFTER the doc changed for
 // discrete edits; for drags, once at the end.
 let preDrag = null
@@ -92,21 +108,7 @@ export const actions = {
     snapshot()
     const counter = nextCounter(state.doc, type)
     const o = makeObject(type, { counter })
-    // Spawn on the first free floor slot near the center so new shapes never
-    // land inside existing ones. Ring scan, deterministic.
-    const taken = state.doc.objects.map(x => x.transform.p)
-    const free = ([x, z]) => taken.every(p => Math.hypot(p[0] - x, p[2] - z) > 0.85)
-    let spot = [0, 0]
-    outer:
-    for (let ring = 0; ring <= 4; ring++) {
-      for (let ix = -ring; ix <= ring; ix++) {
-        for (let iz = -ring; iz <= ring; iz++) {
-          if (Math.max(Math.abs(ix), Math.abs(iz)) !== ring) continue
-          const cand = [ix * 1.15, iz * 1.15]
-          if (free(cand)) { spot = cand; break outer }
-        }
-      }
-    }
+    const spot = freeSpot()
     o.transform.p[0] = spot[0]
     o.transform.p[2] = spot[1]
     o.transform.p[1] = restingY(type, o.params)
@@ -114,6 +116,34 @@ export const actions = {
     viewport.addObject(o)
     actions.select(o.id)
     setDirty(true)
+  },
+
+  // Add a 3D model by URL (GLB): our Files/exports or any https link.
+  addModel (url) {
+    const clean = validModelUrl(url)
+    if (!clean) return { ok: false, error: 'Paste a link that starts with https:// (or a file on this site).' }
+    snapshot()
+    const counter = state.doc.objects.filter(x => x.type === 'model').length + 1
+    const o = makeModelObject(clean, { counter })
+    const spot = freeSpot()
+    o.transform.p = [spot[0], 0, spot[1]]
+    state.doc.objects.push(o)
+    viewport.addObject(o)
+    actions.select(o.id)
+    setDirty(true)
+    return { ok: true, id: o.id }
+  },
+
+  // Fit slider on models: rebuild the node so the GLB renormalizes.
+  setModelFit (id, fit, snapshotFirst) {
+    const o = byId(id)
+    if (!o || o.type !== 'model') return
+    if (snapshotFirst) snapshot()
+    o.params.fit = fit
+    viewport.removeObject(id)
+    viewport.addObject(o)
+    if (state.selectedId === id) viewport.select(id)
+    if (snapshotFirst) setDirty(true)
   },
 
   deleteSelected () {
@@ -376,6 +406,7 @@ window.SceneMakerApp = {
     frames: viewport.stats().frames,
     frameMs: viewport.stats().frameMs
   }),
+  modelStatus: id => viewport.modelStatus(id),
   // Play-mode drive for tests: inject events, sample the engine at wall t.
   play: {
     inject: (type, target, key, x, y) => viewport.playInject(type, target, key, x, y),

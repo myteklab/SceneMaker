@@ -201,6 +201,24 @@ body {
 .recipe-btn:disabled { opacity: 0.35; cursor: default; }
 .recipe-hint { padding: 2px 0 6px; }
 
+/* ------------------------------------------------------------- add model */
+#model-block { padding: 0 10px 10px; }
+#model-row { display: flex; gap: 5px; }
+#model-row input {
+  flex: 1; min-width: 0; font-size: 12px; padding: 5px 8px;
+  border: 1px solid var(--panel-border); border-radius: 7px;
+  color: var(--text); background: var(--bg);
+}
+#model-row input:focus { border-color: var(--accent); outline: none; }
+#model-row button {
+  border: 1px solid var(--panel-border); background: var(--panel); border-radius: 7px;
+  padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--text-dim);
+}
+#model-row button:hover { border-color: var(--accent); color: var(--accent); }
+#model-error { color: var(--danger); font-size: 11px; padding-top: 4px; line-height: 1.4; }
+.model-link { padding: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-error-note { color: var(--danger); padding: 0 0 6px; }
+
 /* Narrow screens: stack panels over the viewport edges. */
 @media (max-width: 860px) {
   body { grid-template-columns: 176px 1fr 210px; }

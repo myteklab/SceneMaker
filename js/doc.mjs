@@ -108,6 +108,36 @@ export function makeObject (type, opts = {}) {
   }
 }
 
+// ---------------------------------------------------------------- models
+// A 'model' object loads a GLB from a URL (our own Files/exports or an
+// https link, MotionMaker's add-image-by-URL precedent). Transform channels
+// and transform recipes work like any object; embedded materials are left
+// alone, so material UI and color/glow recipes don't apply.
+export const MODEL_URL_MAX = 500
+
+export function validModelUrl (url) {
+  if (typeof url !== 'string') return null
+  const u = url.trim()
+  if (!u || u.length > MODEL_URL_MAX) return null
+  if (u.startsWith('/') && !u.startsWith('//')) return u // same-origin path
+  if (u.startsWith('https://')) {
+    try { new URL(u); return u } catch (e) { return null }
+  }
+  return null
+}
+
+export function makeModelObject (url, opts = {}) {
+  return {
+    id: opts.id || freshId(),
+    name: opts.name || ('Model ' + (opts.counter || 1)),
+    type: 'model',
+    params: { url, fit: opts.fit || 1.5 },
+    transform: { p: opts.p || [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1] },
+    visible: true,
+    states: {}
+  }
+}
+
 // Auto-number names per primitive label: "Box 1", "Box 2", ...
 export function nextCounter (doc, type) {
   const def = PRIMITIVES.find(p => p.type === type)
@@ -154,11 +184,14 @@ export const RECIPES = [
     param: { key: 'depth', label: 'How far down', min: 0.05, max: 0.6, step: 0.01, def: 0.12 },
     compile (o, params, rid) {
       const p = o.transform.p
+      const down = { 'transform.p': [p[0], p[1] - params.depth, p[2]] }
+      const up = { 'transform.p': p.slice() }
+      if (o.material && o.material.color) { // models keep their embedded materials
+        down['material.color'] = shade(o.material.color, -0.22)
+        up['material.color'] = o.material.color
+      }
       return {
-        states: {
-          [`r_${rid}_down`]: { 'transform.p': [p[0], p[1] - params.depth, p[2]], 'material.color': shade(o.material.color, -0.22) },
-          [`r_${rid}_up`]: { 'transform.p': p.slice(), 'material.color': o.material.color }
-        },
+        states: { [`r_${rid}_down`]: down, [`r_${rid}_up`]: up },
         events: [{ trigger: 'click', target: o.id, object: o.id, action: 'toggle', states: [`r_${rid}_up`, `r_${rid}_down`], duration: 0.16, easing: 'easeOutBack' }]
       }
     }
@@ -185,7 +218,9 @@ export const RECIPES = [
     type: 'hoverGlow',
     label: 'Glow on hover',
     param: { key: 'glow', label: 'How bright', min: 0.4, max: 2, step: 0.05, def: 1.2 },
+    materialOnly: true, // hidden for models (embedded materials stay theirs)
     compile (o, params, rid) {
+      if (!o.material) return {}
       const base = o.material.emissiveIntensity || 0
       return {
         states: {
@@ -332,6 +367,22 @@ export function normalizeDoc (raw) {
   const seen = new Set()
   for (const o of Array.isArray(raw.objects) ? raw.objects : []) {
     if (!o || typeof o !== 'object' || !o.type) continue
+    if (o.type === 'model') {
+      const url = validModelUrl(o.params && o.params.url)
+      if (!url) continue
+      const id = typeof o.id === 'string' && o.id && !seen.has(o.id) ? o.id : freshId()
+      seen.add(id)
+      const m = makeModelObject(url, { id, name: typeof o.name === 'string' ? o.name.slice(0, 60) : undefined, counter: doc.objects.length + 1 })
+      if (o.params && typeof o.params.fit === 'number') m.params.fit = Math.min(4, Math.max(0.3, o.params.fit))
+      const mtr = o.transform || {}
+      if (Array.isArray(mtr.p)) m.transform.p = mtr.p.slice(0, 3).map(Number)
+      if (Array.isArray(mtr.r)) m.transform.r = mtr.r.slice(0, 3).map(Number)
+      if (Array.isArray(mtr.s)) m.transform.s = mtr.s.slice(0, 3).map(Number)
+      m.visible = o.visible !== false
+      if (o.states && typeof o.states === 'object') m.states = o.states
+      doc.objects.push(m)
+      continue
+    }
     if (!PRIMITIVES.find(p => p.type === o.type)) continue
     const id = typeof o.id === 'string' && o.id && !seen.has(o.id) ? o.id : freshId()
     seen.add(id)

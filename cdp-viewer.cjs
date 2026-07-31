@@ -28,6 +28,8 @@ const DOC = {
     { id: 'gem', name: 'Gem', type: 'icosahedron', params: { radius: 0.5, detail: 0, flat: true },
       transform: { p: [-1.4, 1.2, 0], r: [0, 0, 0], s: [1, 1, 1] },
       material: { color: '#4ecdc4', finish: 'gem', roughness: 0.15, metalness: 0.1, emissiveIntensity: 0.25, opacity: 1 } },
+    { id: 'duck', name: 'Duck', type: 'model', params: { url: '/apps/avatarmaker/assets/models/accessory_duck-floaty.glb', fit: 1.2 },
+      transform: { p: [0, 0, -1.6], r: [0, 0, 0], s: [1, 1, 1] } },
     { id: 'head', name: 'Buddy', type: 'sphere', params: { radius: 0.45 },
       transform: { p: [1.4, 0.9, 0], r: [0, 0, 0], s: [1, 1, 1] },
       material: { color: '#ffd166', finish: 'clay', roughness: 0.8, metalness: 0, emissiveIntensity: 0, opacity: 1 } }
@@ -37,7 +39,8 @@ const DOC = {
     { id: 'rc_t_2', object: 'gem', type: 'spin', params: { secs: 4 } },
     { id: 'rc_t_3', object: 'gem', type: 'hoverGlow', params: { glow: 1.5 } },
     { id: 'rc_t_4', object: 'head', type: 'watchCursor', params: { amount: 0.6 } },
-    { id: 'rc_t_5', object: 'head', type: 'jumpKey', params: { height: 1, pressKey: ' ' } }
+    { id: 'rc_t_5', object: 'head', type: 'jumpKey', params: { height: 1, pressKey: ' ' } },
+    { id: 'rc_t_6', object: 'duck', type: 'spin', params: { secs: 5 } }
   ]
 }
 
@@ -64,7 +67,7 @@ async function main () {
     await ev(`window.postMessage({ type: 'LOAD_PREVIEW', data: ${JSON.stringify(DOC)} }, '*')`)
     await sleep(1500)
     let s = JSON.parse(await ev('JSON.stringify(window.__smv.state())'))
-    check('doc loaded through the protocol', s.loaded === true && s.objects === 3, s)
+    check('doc loaded through the protocol', s.loaded === true && s.objects === 4, s)
     check('frames advancing', s.frames >= 2, s.frames)
     check('interaction hint shown', await ev('document.getElementById("viewer-hint").style.display !== "none"'))
     check('no exceptions on boot/load', exceptions.length === 0 && s.errors.length === 0, exceptions[0] || s.errors[0])
@@ -90,6 +93,19 @@ async function main () {
     await sleep(380)
     rp = JSON.parse(await ev('JSON.stringify(window.__smv.sampleNow())'))
     check('Space makes the buddy jump', rp.head['transform.p'][1] > 1.2, rp.head['transform.p'])
+
+    console.log('[2b] Model by URL in the viewer')
+    let mOk = false
+    for (let i = 0; i < 20; i++) {
+      const st = JSON.parse(await ev('JSON.stringify(window.__smv.state())'))
+      if (st.modelsLoaded === 1) { mOk = true; break }
+      await sleep(1000)
+    }
+    check('GLB model loads on the share-page viewer', mOk)
+    const d1 = JSON.parse(await ev('JSON.stringify(window.__smv.sampleNow())'))
+    await sleep(400)
+    const d2 = JSON.parse(await ev('JSON.stringify(window.__smv.sampleNow())'))
+    check('model spins via its recipe', d1.duck['transform.r'][1] !== d2.duck['transform.r'][1])
 
     console.log('[3] Screenshot')
     await sleep(600)

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SceneMaker</title>
-<link rel="stylesheet" href="css/editor.css?v=3">
+<link rel="stylesheet" href="css/editor.css?v=4">
 </head>
 <body>
 <div id="topbar">
@@ -68,6 +68,14 @@
 <div id="left">
   <h4>Add a shape</h4>
   <div id="add-palette"></div>
+  <h4>Add a 3D model</h4>
+  <div id="model-block">
+    <div id="model-row">
+      <input id="model-url" type="text" placeholder="Paste a .glb link" maxlength="500">
+      <button id="model-add" title="Add model">Add</button>
+    </div>
+    <div id="model-error"></div>
+  </div>
   <h4>Scene</h4>
   <div id="tree"></div>
   <div id="tree-empty">Your scene is empty.<br>Add a shape above!</div>
@@ -85,7 +93,7 @@
 <script type="importmap">
   { "imports": { "three": "./vendor/three/three.module.min.js" } }
 </script>
-<script type="module" src="./js/app.mjs?v=4"></script>
+<script type="module" src="./js/app.mjs?v=5"></script>
 <script>
   setInterval(function () {
     var el = document.getElementById('fps')

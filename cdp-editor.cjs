@@ -186,6 +186,40 @@ async function main () {
     check('recipes reload (2)', doc2.recipes.length === 2, doc2.recipes.length)
     check('compiled interactions regenerate on load', doc2.events.some(e => e.action === 'toggle') && doc2.timelines.length === 1)
 
+    console.log('[12b] Models by URL')
+    const bad = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.actions.addModel('http://insecure.example.com/x.glb'))`))
+    check('http URL rejected', bad.ok === false)
+    const added = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.actions.addModel('/apps/avatarmaker/assets/models/accessory_duck-floaty.glb'))`))
+    check('same-origin glb accepted', added.ok === true, added)
+    const mid = added.id
+    let loaded = false
+    for (let i = 0; i < 30; i++) {
+      const st = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.modelStatus(${JSON.stringify(mid)}))`))
+      if (st && st.loaded) { loaded = true; break }
+      if (st && st.error) break
+      await sleep(1000)
+    }
+    check('GLB loads and swaps in', loaded)
+    await ev(`SceneMakerApp.actions.addRecipe(${JSON.stringify(mid)}, "spin")`)
+    await ev('SceneMakerApp.actions.startPlay()')
+    await sleep(400)
+    const m1 = JSON.parse(await ev('JSON.stringify(SceneMakerApp.play.sampleNow())'))
+    await sleep(400)
+    const m2 = JSON.parse(await ev('JSON.stringify(SceneMakerApp.play.sampleNow())'))
+    check('transform recipes drive the model', m1[mid]['transform.r'][1] !== m2[mid]['transform.r'][1])
+    await ev('SceneMakerApp.actions.stopPlay()')
+    const saved2 = await ev('JSON.stringify(SceneMakerApp.getProjectData())')
+    await ev(`SceneMakerApp.loadProjectData(${saved2})`)
+    let d3 = JSON.parse(await ev('JSON.stringify(SceneMakerApp._doc())'))
+    check('model survives save/load', d3.objects.some(o => o.type === 'model'), d3.objects.map(o => o.type))
+    await ev(`SceneMakerApp.loadProjectData({ objects: [{ type: 'model', params: { url: 'javascript:alert(1)' } }] })`)
+    d3 = JSON.parse(await ev('JSON.stringify(SceneMakerApp._doc())'))
+    check('malicious model URL normalized out', d3.objects.length === 0, d3.objects)
+    const dead = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.actions.addModel('/apps/scenemaker--dev/nope.glb'))`))
+    await sleep(2500)
+    const deadSt = JSON.parse(await ev(`JSON.stringify(SceneMakerApp.modelStatus(${JSON.stringify(dead.id)}))`))
+    check('404 model reports an error, no crash', deadSt && !deadSt.loaded && !!deadSt.error, deadSt)
+
     console.log('[13] Preview capture')
     const prev = await ev('(function(){ var d = SceneMakerApp.previewDataUrl(); return JSON.stringify({ png: d.indexOf("data:image/png") === 0, len: d.length }) })()')
     const p = JSON.parse(prev)

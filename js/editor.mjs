@@ -6,9 +6,9 @@
 import * as THREE from 'three'
 import { OrbitControls } from '../vendor/three/OrbitControls.js'
 import { TransformControls } from '../vendor/three/TransformControls.js'
-import { environmentById } from './doc.mjs?v=4'
-import { createSession } from '../engine/resolver.mjs?v=4'
-import { geometryFor, applyMaterialValues, createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=4'
+import { environmentById } from './doc.mjs?v=5'
+import { createSession } from '../engine/resolver.mjs?v=5'
+import { geometryFor, applyMaterialValues, createStage, applyEnvironmentToStage, buildObjectNode, applyResolvedToNodes } from './scene-build.mjs?v=5'
 
 export function createViewport (canvas, callbacks) {
   const cb = callbacks // { onPick(id|null), onGizmoChange(id), onGizmoCommit(id) }
@@ -49,8 +49,10 @@ export function createViewport (canvas, callbacks) {
     if (!g) return
     if (selectedId === id) select(null)
     scene.remove(g)
-    meshes[id].geometry.dispose()
-    materials[id].dispose()
+    g.traverse(n => {
+      if (n.geometry) n.geometry.dispose()
+      if (n.material && n.material.dispose) n.material.dispose()
+    })
     delete nodes[id]; delete meshes[id]; delete materials[id]
   }
 
@@ -149,8 +151,15 @@ export function createViewport (canvas, callbacks) {
     const r = canvas.getBoundingClientRect()
     ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1)
     raycaster.setFromCamera(ndc, camera)
-    const hits = raycaster.intersectObjects(Object.values(meshes), false)
-    return hits.length ? hits[0].object.userData.docId : null
+    const hits = raycaster.intersectObjects(Object.values(nodes), true)
+    for (const h of hits) {
+      let n = h.object
+      while (n) {
+        if (n.userData.docId && nodes[n.userData.docId]) return n.userData.docId
+        n = n.parent
+      }
+    }
+    return null
   }
 
   canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY] })
@@ -284,8 +293,15 @@ export function createViewport (canvas, callbacks) {
     return url
   }
 
+  function modelStatus (id) {
+    const g = nodes[id]
+    if (!g) return null
+    return { loaded: !!g.userData.modelLoaded, error: g.userData.modelError || null }
+  }
+
   return {
     buildAll,
+    modelStatus,
     addObject,
     removeObject,
     syncTransform,
