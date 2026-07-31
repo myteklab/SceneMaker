@@ -89,6 +89,8 @@ export function makeObject (type, opts = {}) {
   const params = { ...def.params }
   const color = opts.color || SPAWN_COLORS[(opts.counter || 0) % SPAWN_COLORS.length]
   const finish = finishById(opts.finish || 'clay')
+  const finishValues = { ...finish.values }
+  if ('flat' in finishValues) { if (finishValues.flat) params.flat = true; delete finishValues.flat }
   return {
     id: opts.id || freshId(),
     name: opts.name || (def.label + ' ' + (opts.counter || 1)),
@@ -99,7 +101,7 @@ export function makeObject (type, opts = {}) {
       r: [0, 0, 0],
       s: [1, 1, 1]
     },
-    material: { color, finish: finish.id, ...finish.values },
+    material: { color, finish: finish.id, ...finishValues },
     visible: true,
     states: {}
   }
@@ -145,6 +147,7 @@ export function normalizeDoc (raw) {
     if (Array.isArray(tr.r)) base.transform.r = tr.r.slice(0, 3).map(Number)
     if (Array.isArray(tr.s)) base.transform.s = tr.s.slice(0, 3).map(Number)
     if (o.material && typeof o.material === 'object') base.material = { ...base.material, ...o.material }
+    if ('flat' in base.material) { if (base.material.flat) base.params.flat = true; delete base.material.flat }
     base.material.finish = finishById(base.material.finish).id
     base.visible = o.visible !== false
     if (o.states && typeof o.states === 'object') base.states = o.states

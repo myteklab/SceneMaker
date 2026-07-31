@@ -36,7 +36,7 @@ function snapshot () {
 function restore (json) {
   state.doc = normalizeDoc(JSON.parse(json))
   const stillThere = state.doc.objects.find(o => o.id === state.selectedId)
-  viewport.buildAll(state.doc)
+  viewport.buildAll(state.doc, true)
   actions.select(stillThere ? state.selectedId : null)
   ui.refreshAll()
   setDirty(true)
@@ -80,10 +80,23 @@ export const actions = {
     snapshot()
     const counter = nextCounter(state.doc, type)
     const o = makeObject(type, { counter })
-    // Nudge spawn position so stacked adds don't z-fight.
-    const n = state.doc.objects.length
-    o.transform.p[0] = ((n % 5) - 2) * 0.9
-    o.transform.p[2] = (Math.floor(n / 5) % 3) * 0.9
+    // Spawn on the first free floor slot near the center so new shapes never
+    // land inside existing ones. Ring scan, deterministic.
+    const taken = state.doc.objects.map(x => x.transform.p)
+    const free = ([x, z]) => taken.every(p => Math.hypot(p[0] - x, p[2] - z) > 0.85)
+    let spot = [0, 0]
+    outer:
+    for (let ring = 0; ring <= 4; ring++) {
+      for (let ix = -ring; ix <= ring; ix++) {
+        for (let iz = -ring; iz <= ring; iz++) {
+          if (Math.max(Math.abs(ix), Math.abs(iz)) !== ring) continue
+          const cand = [ix * 1.15, iz * 1.15]
+          if (free(cand)) { spot = cand; break outer }
+        }
+      }
+    }
+    o.transform.p[0] = spot[0]
+    o.transform.p[2] = spot[1]
     o.transform.p[1] = restingY(type, o.params)
     state.doc.objects.push(o)
     viewport.addObject(o)
@@ -160,8 +173,11 @@ export const actions = {
     const o = byId(id)
     if (!o) return
     snapshot()
-    o.material = { color: o.material.color, finish: finishId, ...values }
-    o.params.flat = values.flat
+    const v = { ...values }
+    const flat = !!v.flat
+    delete v.flat
+    o.material = { color: o.material.color, finish: finishId, ...v }
+    o.params.flat = flat
     viewport.syncMaterial(o)
     setDirty(true)
   },

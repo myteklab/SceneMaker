@@ -42,7 +42,9 @@ export function createViewport (canvas, callbacks) {
     return env
   }
   const pmrem = new THREE.PMREMGenerator(renderer)
-  let envTexture = null
+  // One baked environment per preset, cached forever: rebaking on every
+  // applyEnvironment call (undo restores included) churns GPU memory.
+  const envCache = {}
 
   const key = new THREE.DirectionalLight(0xffffff, 2.4)
   key.position.set(3.5, 6.5, 4)
@@ -82,9 +84,12 @@ export function createViewport (canvas, callbacks) {
     ground.material.color.set(env.ground)
     ground.visible = envDoc.ground.visible !== false
     grid.visible = ground.visible
-    if (envTexture) envTexture.dispose()
-    envTexture = pmrem.fromScene(makeEnvScene(new THREE.Color(env.key).getHex()), 0.04).texture
-    scene.environment = envTexture
+    if (!envCache[env.id]) {
+      const envScene = makeEnvScene(new THREE.Color(env.key).getHex())
+      envCache[env.id] = pmrem.fromScene(envScene, 0.04).texture
+      envScene.traverse(n => { if (n.geometry) n.geometry.dispose(); if (n.material) n.material.dispose() })
+    }
+    scene.environment = envCache[env.id]
     scene.environmentIntensity = env.envIntensity
   }
 
@@ -172,12 +177,14 @@ export function createViewport (canvas, callbacks) {
     mesh.geometry = geometryFor(o)
   }
 
-  function buildAll (doc) {
+  function buildAll (doc, keepCamera) {
     for (const id of Object.keys(nodes)) removeObject(id)
     for (const o of doc.objects) addObject(o)
     applyEnvironment(doc.environment)
-    camera.position.fromArray(doc.camera.position)
-    orbit.target.fromArray(doc.camera.target)
+    if (!keepCamera) {
+      camera.position.fromArray(doc.camera.position)
+      orbit.target.fromArray(doc.camera.target)
+    }
   }
 
   // ------------------------------------------------------------ controls
