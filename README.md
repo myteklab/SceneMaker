@@ -5,6 +5,8 @@ them with color and finish presets, light the scene with environment presets,
 and (coming next) make it respond to hover, click, and key presses, then
 publish it as a live web page.
 
+**Try it in your browser, no account needed:** [mytekdev.com/tools/scenemaker](https://mytekdev.com/tools/scenemaker). The page has a live demo and explains what students learn from it.
+
 ![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)
 
 ## What it is (and is not)
